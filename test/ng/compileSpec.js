@@ -125,6 +125,19 @@ describe('$compile', function() {
       expect(element.find('span').text()).toEqual('A<a>B</a>C');
     }));
 
+
+    it('should not wrap root whitespace text nodes in spans', function() {
+      element = jqLite(
+        '<div>   <div>A</div>\n  '+ // The spaces and newlines here should not get wrapped
+        '<div>B</div>C\t\n  '+  // The "C", tabs and spaces here will be wrapped
+        '</div>');
+      $compile(element.contents())($rootScope);
+      var spans = element.find('span');
+      expect(spans.length).toEqual(1);
+      expect(spans.text().indexOf('C')).toEqual(0);
+    });
+
+
     describe('multiple directives per element', function() {
       it('should allow multiple directives per element', inject(function($compile, $rootScope, log){
         element = $compile(
@@ -2241,5 +2254,15 @@ describe('$compile', function() {
         expect(nodeName_(comment)).toBe('#comment');
       });
     });
+
+
+    it('should safely create transclude comment node and not break with "-->"',
+        inject(function($rootScope) {
+      // see: https://github.com/angular/angular.js/issues/1740
+      element = $compile('<ul><li ng-repeat="item in [\'-->\', \'x\']">{{item}}|</li></ul>')($rootScope);
+      $rootScope.$digest();
+
+      expect(element.text()).toBe('-->|x|');
+    }));
   });
 });

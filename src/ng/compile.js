@@ -318,7 +318,7 @@ function $CompileProvider($provide) {
       // We can not compile top level text elements since text nodes can be merged and we will
       // not be able to attach scope data to them, so we will wrap them in <span>
       forEach($compileNodes, function(node, index){
-        if (node.nodeType == 3 /* text node */) {
+        if (node.nodeType == 3 /* text node */ && node.nodeValue.match(/\S+/) /* non-empty */ ) {
           $compileNodes[index] = jqLite(node).wrap('<span></span>').parent()[0];
         }
       });
@@ -581,7 +581,7 @@ function $CompileProvider($provide) {
           if (directiveValue == 'element') {
             $template = jqLite(compileNode);
             $compileNode = templateAttrs.$$element =
-                jqLite('<!-- ' + directiveName + ': ' + templateAttrs[directiveName]  + ' -->');
+                jqLite(document.createComment(' ' + directiveName + ': ' + templateAttrs[directiveName] + ' '));
             compileNode = $compileNode[0];
             replaceWith($rootElement, jqLite($template[0]), compileNode);
             childTranscludeFn = compile($template, transcludeFn, terminalPriority);
