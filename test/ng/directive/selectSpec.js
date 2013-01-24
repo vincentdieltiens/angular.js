@@ -794,6 +794,27 @@ describe('select', function() {
         expect(element.val()).toEqual('blue');
       });
 
+	  describe('compare', function() {
+        if('should select the good object using compare expression', function() {
+          createSelect({
+            'ng-model': 'selected',
+            'ng-options': 'value.id as value.name for value in values compare value.id'
+          });
+        
+          scope.$apply(function() {
+            scope.values = [{id: 10, name: 'A'}, {id: 20, name: 'B'}, {id: 30, name: 'C'}];
+            scope.selected = {id: 20, name: 'B'};
+          });
+
+          expect(element.val()).toEqual(20);
+
+          scope.$apply(function() {
+            scope.selected = {id: 30, name: 'C'};
+          });
+          
+          expect(element.val()).toEqual(30);
+      	});
+      });
 
       it('should bind to object value', function() {
         createSelect({

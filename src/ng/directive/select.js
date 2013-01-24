@@ -39,12 +39,21 @@
  *     * `select` **`as`** `label` **`for`** `value` **`in`** `array`
  *     * `label`  **`group by`** `group` **`for`** `value` **`in`** `array`
  *     * `select` **`as`** `label` **`group by`** `group` **`for`** `value` **`in`** `array`
+ *     * `label` **`for`** `value` **`in`** `array` **`compare`** `exp`
+ *     * `select` **`as`** `label` **`for`** `value` **`in`** `array` **`compare`** `exp`
+ *     * `label`  **`group by`** `group` **`for`** `value` **`in`** `array` **`compare`** `exp`
+ *     * `select` **`as`** `label` **`group by`** `group` **`for`** `value` **`in`** `array` **`compare`** `exp`
  *   * for object data sources:
  *     * `label` **`for (`**`key` **`,`** `value`**`) in`** `object`
  *     * `select` **`as`** `label` **`for (`**`key` **`,`** `value`**`) in`** `object`
  *     * `label` **`group by`** `group` **`for (`**`key`**`,`** `value`**`) in`** `object`
  *     * `select` **`as`** `label` **`group by`** `group`
  *         **`for` `(`**`key`**`,`** `value`**`) in`** `object`
+ *     * `label` **`for (`**`key` **`,`** `value`**`) in`** `object` **`compare`** `exp`
+ *     * `select` **`as`** `label` **`for (`**`key` **`,`** `value`**`) in`** `object` **`compare`** `exp` 
+ *     * `label` **`group by`** `group` **`for (`**`key`**`,`** `value`**`) in`** `object` **`compare`** `exp`
+ *     * `select` **`as`** `label` **`group by`** `group`
+ *         **`for` `(`**`key`**`,`** `value`**`) in`** `object` **`compare`** `exp`
  *
  * Where:
  *
@@ -58,6 +67,8 @@
  *      element. If not specified, `select` expression will default to `value`.
  *   * `group`: The result of this expression will be used to group options using the `<optgroup>`
  *      DOM element.
+ *   * `compare`: The result of this expression wil be used to compare models (instead of comparing object references) to
+ *      choose the selected element
  *
  * @example
     <doc:example>
@@ -122,8 +133,8 @@
 
 var ngOptionsDirective = valueFn({ terminal: true });
 var selectDirective = ['$compile', '$parse', function($compile,   $parse) {
-                         //00001111100000000000222200000000000000000000003333000000000000044444444444444444000000000555555555555555550000000666666666666666660000000000000007777
-  var NG_OPTIONS_REGEXP = /^\s*(.*?)(?:\s+as\s+(.*?))?(?:\s+group\s+by\s+(.*))?\s+for\s+(?:([\$\w][\$\w\d]*)|(?:\(\s*([\$\w][\$\w\d]*)\s*,\s*([\$\w][\$\w\d]*)\s*\)))\s+in\s+(.*)$/,
+                         //0000111110000000000022220000000000000000000000333300000000000004444444444444444400000000055555555555555555000000066666666666666666000000000000000777700000000000000000888000
+var NG_OPTIONS_REGEXP = /^\s*(.*?)(?:\s+as\s+(.*?))?(?:\s+group\s+by\s+(.*))?\s+for\s+(?:([\$\w][\$\w\d]*)|(?:\(\s*([\$\w][\$\w\d]*)\s*,\s*([\$\w][\$\w\d]*)\s*\)))\s+in\s+(.*?)(?:\s+compare\s+(.*?))?$/,
       nullModelCtrl = {$setViewValue: noop};
 
   return {
@@ -297,16 +308,17 @@ var selectDirective = ['$compile', '$parse', function($compile,   $parse) {
 
         if (! (match = optionsExp.match(NG_OPTIONS_REGEXP))) {
           throw Error(
-            "Expected ngOptions in form of '_select_ (as _label_)? for (_key_,)?_value_ in _collection_'" +
+            "Expected ngOptionsq in form of '_select_ (as _label_)? for (_key_,)?_value_ in _collection_ (compare _comparison_)?'" +
             " but got '" + optionsExp + "'.");
         }
-
+        
         var displayFn = $parse(match[2] || match[1]),
             valueName = match[4] || match[6],
             keyName = match[5],
             groupByFn = $parse(match[3] || ''),
             valueFn = $parse(match[2] ? match[1] : valueName),
             valuesFn = $parse(match[7]),
+            compareFn = match[8] ? $parse(match[8]) : null,
             // This is an array of array of existing option groups in DOM. We try to reuse these if possible
             // optionGroupsCache[0] is the options with no option group
             // optionGroupsCache[?][0] is the parent: either the SELECT or OPTGROUP element
@@ -390,10 +402,20 @@ var selectDirective = ['$compile', '$parse', function($compile,   $parse) {
               selectedSet = false, // nothing is selected yet
               lastElement,
               element,
-              label;
-
+              label,
+              modelCompare = {};
+          
           if (multiple) {
-            selectedSet = new HashMap(modelValue);
+            if (compareFn) {
+              var modelValueCompare = array();
+              forEach(modelValue, function(key, value) {
+                modelCompare[valueName] = modelValue[key];
+                modelValueCompare[key] = compareFn(modelCompare);
+              });
+              selectedSet = new HashMap(modelValueCompare);
+            } else {
+              selectedSet = new HashMap(modelValue);
+            }
           } else if (modelValue === null || nullOption) {
             // if we are not multiselect, and we are null then we have to add the nullOption
             optionGroups[''].push({selected:modelValue === null, id:'', label:''});
@@ -409,9 +431,18 @@ var selectDirective = ['$compile', '$parse', function($compile,   $parse) {
               optionGroupNames.push(optionGroupName);
             }
             if (multiple) {
-              selected = selectedSet.remove(valueFn(scope, locals)) != undefined;
+              if (compareFn) {
+                selected = selectedSet.remove(compareFn(scope, locals)) != undefined;
+              } else {
+                selected = selectedSet.remove(valueFn(scope, locals)) != undefined;
+              }
             } else {
-              selected = modelValue === valueFn(scope, locals);
+              if (compareFn) {
+                modelCompare[valueName] = modelValue;
+                selected = compareFn(scope, locals) === compareFn(modelCompare);
+              } else {
+                selected = modelValue === valueFn(scope, locals);
+              }
               selectedSet = selectedSet || selected; // see if at least one item is selected
             }
             label = displayFn(scope, locals); // what will be seen by the user
